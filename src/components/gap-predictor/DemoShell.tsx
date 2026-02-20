@@ -1,9 +1,11 @@
 // frontend/src/components/gap-predictor/DemoShell.tsx
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import type { AttemptEvent, GapPrediction, ViewMode } from "@/lib/gap-predictor/types";
-import { CONCEPT_LABEL } from "@/lib/gap-predictor/types";
+import { HeroSection } from "@/components/gap-predictor/HeroSection";
+import { EventTimeline } from "@/components/gap-predictor/EventTimeline";
+import { GapPanel } from "@/components/gap-predictor/GapPanel";
 
 type Props = {
   mode: ViewMode;
@@ -13,6 +15,10 @@ type Props = {
   onReset: () => void;
   onSimulateFractions: () => void;
   onSimulateSigns: () => void;
+
+  // Optional “backend-mimic” signals (safe defaults)
+  isIngesting?: boolean;
+  lastIngestedAt?: number;
 };
 
 export function DemoShell({
@@ -23,225 +29,235 @@ export function DemoShell({
   onReset,
   onSimulateFractions,
   onSimulateSigns,
+  isIngesting,
+  lastIngestedAt,
 }: Props) {
-  const recent = [...events].sort((a, b) => b.ts - a.ts).slice(0, 8);
-  const top = predictions.slice(0, 3);
+  const coachStats = useMemo(() => computeCoachStats(events), [events]);
 
   return (
     <main className="min-h-screen bg-[#05060a] text-white">
       <div className="mx-auto w-full max-w-6xl px-5 py-10">
-        {/* Straight-to-feature “hero” (no header/footer) */}
         <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-b from-white/5 to-transparent p-7">
-          <div className="pointer-events-none absolute inset-0 opacity-60">
+          {/* ambient blobs */}
+          <div className="pointer-events-none absolute inset-0 opacity-70">
             <div className="absolute -top-24 right-10 h-64 w-64 rounded-full bg-blue-600/20 blur-3xl" />
             <div className="absolute -bottom-24 left-10 h-64 w-64 rounded-full bg-yellow-400/15 blur-3xl" />
+            <div className="absolute left-1/2 top-1/2 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/5 blur-3xl" />
           </div>
 
           <div className="relative flex flex-col gap-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div>
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white/80">
-                  <span className="h-2 w-2 rounded-full bg-yellow-400" />
-                  Learning Gap Predictor (frontend-only, backend-mimic)
+            <HeroSection
+              mode={mode}
+              setMode={setMode}
+              onSimulateFractions={onSimulateFractions}
+              onSimulateSigns={onSimulateSigns}
+              onReset={onReset}
+            />
+
+            {/* Live system status row */}
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_18px_rgba(52,211,153,0.45)]" />
+                <div className="text-xs text-white/75">
+                  <span className="text-white/90 font-semibold">Demo system</span>{" "}
+                  <span className="text-white/50">•</span>{" "}
+                  Local telemetry + inference
                 </div>
 
-                <h1 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl">
-                  Flags conceptual gaps before they become blockers.
-                </h1>
-
-                <p className="mt-2 max-w-2xl text-sm text-white/70">
-                  Prototype logic runs locally: it watches problem-solving patterns (errors, time, hints), detects repeated
-                  conceptual signatures, and recommends targeted remediation.
-                </p>
+                {isIngesting ? (
+                  <span className="ml-2 inline-flex items-center gap-2 rounded-full bg-blue-600/15 px-3 py-1 text-[11px] text-blue-200 ring-1 ring-blue-500/25">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-blue-400" />
+                    ingesting…
+                  </span>
+                ) : (
+                  <span className="ml-2 inline-flex items-center gap-2 rounded-full bg-white/5 px-3 py-1 text-[11px] text-white/70 ring-1 ring-white/10">
+                    <span className="h-2 w-2 rounded-full bg-yellow-400/80" />
+                    ready
+                  </span>
+                )}
               </div>
 
-              <div className="flex flex-col gap-3 lg:items-end">
-                <div className="inline-flex rounded-xl border border-white/10 bg-white/5 p-1">
-                  <ToggleButton active={mode === "student"} onClick={() => setMode("student")}>
-                    Student View
-                  </ToggleButton>
-                  <ToggleButton active={mode === "coach"} onClick={() => setMode("coach")}>
-                    Coach View
-                  </ToggleButton>
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <ActionButton onClick={onSimulateFractions}>Simulate Fractions Mistake</ActionButton>
-                  <ActionButton onClick={onSimulateSigns}>Simulate Sign Mistake</ActionButton>
-                  <button
-                    onClick={onReset}
-                    className="rounded-xl px-4 py-2 text-xs text-white/70 underline-offset-4 hover:text-white hover:underline"
-                  >
-                    Reset demo
-                  </button>
-                </div>
+              <div className="flex flex-wrap items-center gap-2 text-[11px] text-white/60">
+                <span className="rounded-full bg-white/5 px-3 py-1 ring-1 ring-white/10">
+                  events: <span className="text-white/85">{events.length}</span>
+                </span>
+                <span className="rounded-full bg-white/5 px-3 py-1 ring-1 ring-white/10">
+                  gaps: <span className="text-white/85">{predictions.length}</span>
+                </span>
+                <span className="rounded-full bg-white/5 px-3 py-1 ring-1 ring-white/10">
+                  last ingest:{" "}
+                  <span className="text-white/85">
+                    {lastIngestedAt ? timeAgo(lastIngestedAt) : "—"}
+                  </span>
+                </span>
               </div>
             </div>
 
-            {/* Feature grid */}
-            <div className="grid gap-5 lg:grid-cols-3">
-              {/* Timeline */}
-              <section className="rounded-2xl border border-white/10 bg-white/5 p-5 lg:col-span-2">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-white/90">Problem-solving timeline</h2>
-                  <span className="text-xs text-white/55">{events.length} events</span>
-                </div>
-
-                <div className="mt-4 space-y-3">
-                  {recent.map((e) => (
-                    <div key={e.id} className="rounded-xl border border-white/10 bg-black/20 p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-sm text-white/90">
-                          <span className="font-medium">{e.problemId}</span>{" "}
-                          <span className="text-white/60">•</span>{" "}
-                          <span className="text-white/75">{e.prompt}</span>
+            {/* Coach-only diagnostics (THIS is what makes views feel different) */}
+            {mode === "coach" && (
+              <section className="grid gap-4 rounded-2xl border border-white/10 bg-white/5 p-5 lg:grid-cols-3">
+                <CoachCard title="Mastery snapshot">
+                  <div className="space-y-3">
+                    {coachStats.mastery.map((m) => (
+                      <div key={m.label}>
+                        <div className="flex items-center justify-between text-xs text-white/70">
+                          <span className="text-white/85">{m.label}</span>
+                          <span>{m.score}/100</span>
                         </div>
-
-                        <span className={StatusPillClass(e.isCorrect)}>
-                          {e.isCorrect ? "Correct" : "Incorrect"}
-                        </span>
+                        <div className="mt-1 h-2 rounded-full bg-black/30 ring-1 ring-white/10">
+                          <div
+                            className="h-2 rounded-full bg-blue-600/70"
+                            style={{ width: `${m.score}%` }}
+                          />
+                        </div>
                       </div>
+                    ))}
+                  </div>
+                </CoachCard>
 
-                      <div className="mt-2 grid gap-2 text-xs text-white/65 sm:grid-cols-2">
-                        <div>
-                          Answer: <span className="text-white/85">{e.studentAnswer}</span>{" "}
-                          <span className="text-white/40">→</span>{" "}
-                          <span className="text-white/85">{e.correctAnswer}</span>
-                        </div>
+                <CoachCard title="Top error signatures">
+                  {coachStats.topErrors.length === 0 ? (
+                    <div className="text-xs text-white/65">No error signatures yet.</div>
+                  ) : (
+                    <ul className="space-y-2">
+                      {coachStats.topErrors.map((e) => (
+                        <li
+                          key={e.code}
+                          className="flex items-center justify-between rounded-lg bg-black/20 px-3 py-2 text-xs ring-1 ring-white/10"
+                        >
+                          <span className="text-white/80">{humanizeError(e.code)}</span>
+                          <span className="rounded-full bg-yellow-400/10 px-2 py-1 text-[11px] text-yellow-200 ring-1 ring-yellow-400/25">
+                            {e.count}x
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </CoachCard>
 
-                        <div className="sm:text-right">
-                          {e.timeSpentSec}s • {e.hintsUsed} hint{e.hintsUsed === 1 ? "" : "s"} •{" "}
-                          {e.conceptTags.map((c) => CONCEPT_LABEL[c]).join(", ")}
-                        </div>
+                <CoachCard title="Intervention timing">
+                  <div className="space-y-2 text-xs text-white/70">
+                    <div className="rounded-lg bg-black/20 px-3 py-2 ring-1 ring-white/10">
+                      <div className="text-white/85 font-semibold">Now</div>
+                      <div className="mt-1">
+                        Trigger a 2–3 minute micro-lesson when a signature repeats twice in the last 5 attempts.
                       </div>
                     </div>
-                  ))}
-                </div>
-
-                {mode === "coach" && (
-                  <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-4 text-xs text-white/70">
-                    <div className="font-semibold text-white/85">Backend mimic (local telemetry)</div>
-                    <div className="mt-1">
-                      Each attempt emits an event → stored locally → inference recomputes gap risk in real-time.
+                    <div className="rounded-lg bg-black/20 px-3 py-2 ring-1 ring-white/10">
+                      <div className="text-white/85 font-semibold">Later</div>
+                      <div className="mt-1">
+                        Schedule mixed review if confidence drops but student is still progressing.
+                      </div>
                     </div>
                   </div>
-                )}
+                </CoachCard>
               </section>
+            )}
 
-              {/* Predictions */}
-              <aside className="rounded-2xl border border-white/10 bg-white/5 p-5">
-                <h2 className="text-sm font-semibold text-white/90">Predicted learning gaps</h2>
-                <p className="mt-1 text-xs text-white/65">
-                  Uses repeated error signatures + friction (time/hints) to flag gaps early.
-                </p>
-
-                <div className="mt-4 space-y-3">
-                  {top.length === 0 ? (
-                    <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-xs text-white/70">
-                      No strong gaps detected yet. Keep practicing.
-                    </div>
-                  ) : (
-                    top.map((p) => {
-                      const pct = Math.round(p.confidence * 100);
-                      return (
-                        <div key={p.concept} className="rounded-xl border border-white/10 bg-black/20 p-4">
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="text-sm font-semibold text-white/90">{CONCEPT_LABEL[p.concept]}</div>
-                            <span className={SeverityPillClass(p.severity)}>
-                              {p.severity.toUpperCase()} • {pct}%
-                            </span>
-                          </div>
-
-                          <ul className="mt-2 space-y-1 text-xs text-white/70">
-                            {p.rationale.slice(0, 3).map((r, i) => (
-                              <li key={i} className="flex gap-2">
-                                <span className="mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full bg-yellow-400/80" />
-                                <span>{r}</span>
-                              </li>
-                            ))}
-                          </ul>
-
-                          <div className="mt-3">
-                            <div className="text-xs font-semibold text-white/85">Recommended next</div>
-                            <div className="mt-2 space-y-2">
-                              {p.recommendedNext.slice(0, 3).map((rec, i) => (
-                                <button
-                                  key={i}
-                                  className="flex w-full items-center justify-between rounded-lg bg-white/5 px-3 py-2 text-left text-xs text-white/80 ring-1 ring-white/10 transition hover:bg-white/10"
-                                >
-                                  <span>{rec.title}</span>
-                                  <span className="text-blue-200">{rec.action}</span>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
-                </div>
-
-                <div className="mt-4 rounded-xl border border-white/10 bg-gradient-to-r from-blue-600/20 to-transparent p-4 text-xs text-white/70">
-                  <div className="font-semibold text-white/90">Impact</div>
-                  <div className="mt-1">Fewer stuck moments → less frustration → higher retention.</div>
-                </div>
-              </aside>
+            {/* Main feature grid */}
+            <div className="grid gap-5 lg:grid-cols-3">
+              <EventTimeline events={events} mode={mode} onReset={onReset} />
+              <GapPanel predictions={predictions} />
             </div>
           </div>
+        </div>
+
+        {/* Subtle bottom hint (not a footer) */}
+        <div className="mt-5 text-center text-[11px] text-white/45">
+          Tip: Click “Simulate … Mistake” a few times to watch gap confidence rise like a real system.
         </div>
       </div>
     </main>
   );
 }
 
-function ToggleButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+function CoachCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <button
-      onClick={onClick}
-      className={`rounded-lg px-3 py-2 text-xs transition ${
-        active ? "bg-blue-600 text-white" : "text-white/70 hover:text-white"
-      }`}
-    >
+    <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+      <div className="mb-3 text-sm font-semibold text-white/90">{title}</div>
       {children}
-    </button>
+    </div>
   );
 }
 
-function ActionButton({
-  onClick,
-  children,
-}: {
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="rounded-xl bg-white/5 px-4 py-2 text-xs text-white/80 ring-1 ring-white/10 transition hover:bg-white/10"
-    >
-      {children}
-    </button>
-  );
+function timeAgo(ts: number) {
+  const s = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+  if (s < 10) return "just now";
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  return `${h}h ago`;
 }
 
-function StatusPillClass(isCorrect: boolean) {
-  return `rounded-full px-2 py-1 text-xs ring-1 ${
-    isCorrect
-      ? "bg-emerald-400/10 text-emerald-200 ring-emerald-400/20"
-      : "bg-yellow-400/10 text-yellow-200 ring-yellow-400/20"
-  }`;
+function computeCoachStats(events: AttemptEvent[]) {
+  // Simple “coach lens”: mastery proxy + signature counts
+  const wrong = events.filter((e) => !e.isCorrect);
+  const total = Math.max(1, events.length);
+
+  const byConcept = new Map<string, { total: number; wrong: number }>();
+  for (const e of events) {
+    for (const c of e.conceptTags) {
+      const cur = byConcept.get(c) ?? { total: 0, wrong: 0 };
+      cur.total += 1;
+      if (!e.isCorrect) cur.wrong += 1;
+      byConcept.set(c, cur);
+    }
+  }
+
+  const mastery = [...byConcept.entries()]
+    .map(([concept, v]) => {
+      const wrongRate = v.wrong / Math.max(1, v.total);
+      const score = Math.round(100 - wrongRate * 85); // heuristic
+      return { label: conceptLabel(concept), score: clamp(score, 0, 100) };
+    })
+    .sort((a, b) => a.score - b.score)
+    .slice(0, 4);
+
+  const errorCounts = new Map<string, number>();
+  for (const w of wrong) {
+    if (w.errorCode) errorCounts.set(w.errorCode, (errorCounts.get(w.errorCode) ?? 0) + 1);
+  }
+  const topErrors = [...errorCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([code, count]) => ({ code, count }));
+
+  return { mastery, topErrors, wrongRate: wrong.length / total };
 }
 
-function SeverityPillClass(sev: "low" | "medium" | "high") {
-  if (sev === "high") return "rounded-full px-2 py-1 text-xs ring-1 bg-yellow-400/15 text-yellow-200 ring-yellow-400/25";
-  if (sev === "medium") return "rounded-full px-2 py-1 text-xs ring-1 bg-blue-600/15 text-blue-200 ring-blue-500/25";
-  return "rounded-full px-2 py-1 text-xs ring-1 bg-white/10 text-white/80 ring-white/15";
+function conceptLabel(concept: string) {
+  switch (concept) {
+    case "fractions_add_sub":
+      return "Fractions: add/subtract";
+    case "fractions_mul_div":
+      return "Fractions: multiply/divide";
+    case "negatives_signs":
+      return "Negatives & signs";
+    case "algebra_simplify":
+      return "Algebra: simplify";
+    case "linear_equations":
+      return "Linear equations";
+    default:
+      return concept;
+  }
+}
+
+function humanizeError(code: string) {
+  switch (code) {
+    case "denominator_mismatch":
+      return "Common denominator mistakes";
+    case "sign_error":
+      return "Negative sign mistakes";
+    case "distribution_error":
+      return "Distribution / brackets";
+    case "careless":
+      return "Careless arithmetic slips";
+    default:
+      return code;
+  }
+}
+
+function clamp(x: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, x));
 }
