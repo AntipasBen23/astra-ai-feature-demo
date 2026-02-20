@@ -3,54 +3,59 @@
 
 import React, { useMemo, useState } from "react";
 import { DemoShell } from "@/components/gap-predictor/DemoShell";
-import { seededDemoEvents } from "@/lib/gap-predictor/demoData";
 import { computeGapPredictions } from "@/lib/gap-predictor/inference";
+import { useEventStore } from "@/lib/gap-predictor/useEventStore";
 import type { AttemptEvent, ViewMode } from "@/lib/gap-predictor/types";
 
+function makeAttempt(kind: "fractions" | "signs"): AttemptEvent {
+  const ts = Date.now();
+  const id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(ts);
+
+  if (kind === "fractions") {
+    return {
+      id,
+      ts,
+      problemId: "P-1054",
+      prompt: "Compute: 3/4 + 1/8",
+      conceptTags: ["fractions_add_sub"],
+      studentAnswer: "4/12",
+      correctAnswer: "7/8",
+      isCorrect: false,
+      timeSpentSec: 83,
+      hintsUsed: 2,
+      errorCode: "denominator_mismatch",
+    };
+  }
+
+  return {
+    id,
+    ts,
+    problemId: "P-2113",
+    prompt: "Simplify: -(x - 4) when x=2",
+    conceptTags: ["negatives_signs", "algebra_simplify"],
+    studentAnswer: "-(-2)",
+    correctAnswer: "2",
+    isCorrect: false,
+    timeSpentSec: 58,
+    hintsUsed: 1,
+    errorCode: "sign_error",
+  };
+}
+
 export default function Page() {
-  // Straight to the feature: no header/footer, no navigation.
-  const [events, setEvents] = useState<AttemptEvent[]>(() => seededDemoEvents());
+  // Backend-mimic store: persists across refresh + ingests with latency/jitter.
+  const { events, ingest, reset, isIngesting, lastIngestedAt } = useEventStore({
+    persist: true,
+    seed: true,
+  });
+
   const [mode, setMode] = useState<ViewMode>("student");
 
   const predictions = useMemo(() => computeGapPredictions(events), [events]);
 
-  function resetDemo() {
-    setEvents(seededDemoEvents());
-  }
-
-  function addSimulatedAttempt(kind: "fractions" | "signs") {
-    const ts = Date.now();
-
-    const next: AttemptEvent =
-      kind === "fractions"
-        ? {
-            id: crypto.randomUUID(),
-            ts,
-            problemId: "P-1054",
-            prompt: "Compute: 3/4 + 1/8",
-            conceptTags: ["fractions_add_sub"],
-            studentAnswer: "4/12",
-            correctAnswer: "7/8",
-            isCorrect: false,
-            timeSpentSec: 83,
-            hintsUsed: 2,
-            errorCode: "denominator_mismatch",
-          }
-        : {
-            id: crypto.randomUUID(),
-            ts,
-            problemId: "P-2113",
-            prompt: "Simplify: -(x - 4) when x=2",
-            conceptTags: ["negatives_signs", "algebra_simplify"],
-            studentAnswer: "-(-2)",
-            correctAnswer: "2",
-            isCorrect: false,
-            timeSpentSec: 58,
-            hintsUsed: 1,
-            errorCode: "sign_error",
-          };
-
-    setEvents((prev) => [...prev, next]);
+  function onSimulate(kind: "fractions" | "signs") {
+    // Fire-and-forget (DemoShell expects sync callbacks).
+    void ingest(makeAttempt(kind));
   }
 
   return (
@@ -59,9 +64,11 @@ export default function Page() {
       setMode={setMode}
       events={events}
       predictions={predictions}
-      onReset={resetDemo}
-      onSimulateFractions={() => addSimulatedAttempt("fractions")}
-      onSimulateSigns={() => addSimulatedAttempt("signs")}
+      onReset={reset}
+      onSimulateFractions={() => onSimulate("fractions")}
+      onSimulateSigns={() => onSimulate("signs")}
+      // NOTE: we’ll wire these into the UI in the next file to make it feel alive.
+      // Keeping props unchanged for now so your build doesn’t break.
     />
   );
 }
